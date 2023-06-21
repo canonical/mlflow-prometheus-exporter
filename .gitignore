@@ -1,0 +1,15 @@
+venv/
+build/
+*.charm
+*.rock
+.tox/
+.coverage
+__pycache__/
+*.py[cod]
+.idea
+.vscode/
+
+kubeconfig.tmp
+new_config
+.mypy_cache
+mlruns/
