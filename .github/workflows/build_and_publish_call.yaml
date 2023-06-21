@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Current image version for given MLflow and Ubuntu versions"
+        description: "Current image version for given MLflow Exporter and Ubuntu versions"
         default: "1.0"
         type: string
         required: false
@@ -16,7 +16,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: "Current image version for given MLflow and Ubuntu versions"
+        description: "Current image version for given MLflow Exporter and Ubuntu versions"
         default: "1.0"
         type: string
         required: false
@@ -75,5 +75,5 @@ jobs:
       
       - name: Docker push image to DockerHub
         run: |
-          docker tag ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ github.sha }} ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ inputs.mlflow-version }}_${{ inputs.version }}-22.04
-          docker push ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ inputs.mlflow-version }}_${{ inputs.version }}-22.04
+          docker tag ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ github.sha }} ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ inputs.version }}-22.04
+          docker push ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ inputs.version }}-22.04
