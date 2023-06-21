@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: sudo apt-get install python3-pip tox
+
+    - name: Lint code
+      run: tox -e lint
+  
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: sudo apt-get install python3-pip tox
+
+    - name: Run integration tests
+      run: tox -e integration

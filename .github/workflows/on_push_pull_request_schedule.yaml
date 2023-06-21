@@ -1,0 +1,19 @@
+name: On Pull Request
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 14 * * 1"
+
+jobs:
+  integrate:
+    name: Lint + Unit + Integration tests
+    uses: ./.github/workflows/integrate.yaml
+  build_and_publish:
+    name: Build and Publish the image
+    uses: ./.github/workflows/build_and_publish_call.yaml
+    secrets:
+      DOCKER_HUB_CHARMED_USERNAME: ${{ secrets.DOCKER_HUB_CHARMED_USERNAME }}
+      DOCKER_HUB_CHARMED_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_CHARMED_ACCESS_TOKEN }}
