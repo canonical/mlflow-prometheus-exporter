@@ -79,4 +79,4 @@ PORT=8000 MLFLOW_URL=http://localhost:31380/ TIMEOUT=20 python mlflow_exporter.p
 
 ## Contributing
 
-If you'd like to contribute to the MLflow Prometheus Exporter Docker image, feel free to fork this repository and submit a pull request. Contributions are always welcome!
+If you'd like to contribute to the MLflow Prometheus Exporter, feel free to fork this repository and submit a pull request. Contributions are always welcome!
