@@ -69,9 +69,13 @@ The MLflow Prometheus Exporter can be configured using environment variables:
 
 - `PORT`: The port on which the exporter server will run (default: `8000`).
 - `MLFLOW_URL`: The MLflow server URL for collecting data (default: `http://localhost:5000/`).
-- `TIMEOUT`: The timeout for pooling new metrics (default: `30`).
+- `TIMEOUT`: The timeout for polling new metrics in seconds (default: `30`).
 
-You can set these environment variables when running the Docker container or provide them in a configuration file.
+Example ussage: 
+```
+python mlflow_exporter.py -p 8999 -u http://localhost:31380/ -t 30
+PORT=8000 MLFLOW_URL=http://localhost:31380/ TIMEOUT=20 python mlflow_exporter.py
+```
 
 ## Contributing
 

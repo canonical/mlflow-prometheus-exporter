@@ -1,3 +1,4 @@
 pytest
 requests
+tenacity
 -r requirements.txt
