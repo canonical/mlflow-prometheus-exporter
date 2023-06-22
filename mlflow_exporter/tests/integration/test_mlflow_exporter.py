@@ -6,7 +6,6 @@
 """Integration tests for testing mlflow exporter with local MLflow server."""
 
 import subprocess
-import time
 
 import mlflow
 import pytest
