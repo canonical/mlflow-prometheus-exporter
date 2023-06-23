@@ -8,7 +8,7 @@ description: |
   enhance observability and streamline monitoring and analysis workflows for MLflow using 
   Prometheus and the Observability Stack.
 
-version: "v1.0.0_22.04"
+version: "v1.0.0_22.04_1"
 license: Apache-2.0
 build-base: ubuntu:22.04
 base: bare
