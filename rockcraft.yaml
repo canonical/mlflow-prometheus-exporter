@@ -1,0 +1,46 @@
+name: mlflow-prometheus-exporter
+summary: MLflow Prometheus Exporter Image
+description: |
+  The Docker image for the Prometheus Python exporter for MLflow is a self-contained package 
+  that collects and exposes custom metrics from MLflow servers. It integrates seamlessly with 
+  MLflow deployments, leveraging the MLflow REST API to gather metrics such as registered 
+  models and deployments. By deploying this image as a containerized service, users can 
+  enhance observability and streamline monitoring and analysis workflows for MLflow using 
+  Prometheus and the Observability Stack.
+
+version: "v1.0.0_22.04_1"
+license: Apache-2.0
+build-base: ubuntu:22.04
+base: bare
+platforms:
+  amd64:
+run-user: _daemon_
+
+services:
+  mlflow-prometheus-exporter:
+    override: replace
+    command: python3 mlflow_exporter.py
+    startup: enabled
+
+parts:
+  security-team-requirement:
+    plugin: nil
+    override-build: |
+      # security requirement
+      # there are no packages installed in `bare` base which is used in this rock
+      mkdir -p ${CRAFT_PART_INSTALL}/usr/share/rocks
+      (echo "# os-release" && cat /etc/os-release && echo "# dpkg-query") \
+       > ${CRAFT_PART_INSTALL}/usr/share/rocks/dpkg.query
+
+  mlflow:
+    source: .
+    plugin: python
+    stage-packages:
+    - python3.10
+    - python3.10-venv
+    - tzdata
+    python-requirements:
+    - requirements.txt
+    override-build: |
+      craftctl default
+      cp mlflow_exporter/mlflow_exporter.py $CRAFT_PART_INSTALL
