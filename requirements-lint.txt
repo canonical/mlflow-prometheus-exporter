@@ -43,7 +43,7 @@ pathspec==0.11.1
     #   black
 pep8-naming==0.13.3
     # via -r requirements-lint.in
-platformdirs==3.7.0
+platformdirs==3.8.0
     # via
     #   -r requirements-fmt.txt
     #   black
@@ -63,7 +63,9 @@ tomli==2.0.1
     #   black
     #   pyproject-flake8
 typing-extensions==4.6.3
-    # via black
+    # via
+    #   -r requirements-fmt.txt
+    #   black
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
