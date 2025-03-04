@@ -38,8 +38,8 @@ If you prefer to build the Docker image locally, you can follow these steps:
 
    Adjust the port mapping (`-p`) and container name (`--name`) as needed.
 
-### Build Locally ROCK
-This repository contains also `rockcraft.yaml` which can be used to build ROCK oci image. To build the ROCK follow these steps:
+### Build Locally Rock
+This repository contains also `rockcraft.yaml` which can be used to build rock oci image. To build the rock follow these steps:
 
 1. Install essential tools 
    ```
