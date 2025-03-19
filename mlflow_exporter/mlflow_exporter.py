@@ -19,12 +19,24 @@ def collect_metrics():
     """Collect MLflow data and update Prometheus metrics."""
     num_registered_models = len(mlflow.search_registered_models())
     num_experiments = len(mlflow.search_experiments())
-    num_runs = len(mlflow.search_runs())
+
+    # runs statistic
+    df = mlflow.search_runs(search_all_experiments=True)
+    num_runs = len(df)
+    num_failed_runs = len(df[df['status']=='FAILED'])
+    num_finished_runs = len(df[df['status']=='FINISHED'])
+    num_running_run = len(df[df['status']=='RUNNING'])
+    num_unique_users = len(df['tags.mlflow.user'].unique())
 
     # Update Prometheus metrics
     mlflow_metric.labels(metric_name="num_registered_models").set(num_registered_models)
     mlflow_metric.labels(metric_name="num_experiments").set(num_experiments)
     mlflow_metric.labels(metric_name="num_runs").set(num_runs)
+    mlflow_metric.labels(metric_name="num_finished_runs").set(num_finished_runs)
+    mlflow_metric.labels(metric_name="num_failed_runs").set(num_failed_runs)
+    mlflow_metric.labels(metric_name="num_running_runs").set(num_running_run)
+    mlflow_metric.labels(metric_name="num_unique_users").set(num_unique_users)
+    
 
 
 if __name__ == "__main__":
