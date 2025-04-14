@@ -50,8 +50,6 @@ entrypoints==0.4
     # via
     #   -r requirements.txt
     #   mlflow
-exceptiongroup==1.1.2
-    # via pytest
 flask==2.3.2
     # via
     #   -r requirements.txt
@@ -64,7 +62,7 @@ gitdb==4.0.10
     # via
     #   -r requirements.txt
     #   gitpython
-gitpython==3.1.31
+gitpython==3.1.37
     # via
     #   -r requirements.txt
     #   mlflow
@@ -83,15 +81,7 @@ idna==3.4
 importlib-metadata==6.8.0
     # via
     #   -r requirements.txt
-    #   alembic
-    #   flask
-    #   markdown
     #   mlflow
-importlib-resources==6.0.0
-    # via
-    #   -r requirements.txt
-    #   alembic
-    #   matplotlib
 iniconfig==2.0.0
     # via pytest
 itsdangerous==2.1.2
@@ -245,8 +235,6 @@ threadpoolctl==3.1.0
     # via
     #   -r requirements.txt
     #   scikit-learn
-tomli==2.0.1
-    # via pytest
 typing-extensions==4.7.1
     # via
     #   -r requirements.txt
@@ -274,7 +262,6 @@ zipp==3.16.0
     # via
     #   -r requirements.txt
     #   importlib-metadata
-    #   importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
