@@ -1,2 +1,2 @@
-mlflow
+mlflow==3.14.0
 prometheus_client
