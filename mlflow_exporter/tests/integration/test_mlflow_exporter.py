@@ -44,7 +44,7 @@ def exporter_server():
 
 @retry(stop=stop_after_delay(TEST_EXPORTER_TIMEOUT), wait=wait_fixed(1))
 def verify_metrics():
-    """Try to get metrices every 1 second."""
+    """Try to get metrics every 1 second."""
     response = requests.get(f"http://localhost:{TEST_EXPORTER_PORT}/metrics")
     response.raise_for_status()  # Raise exception if the request was not successful
     metrics_text = response.text
