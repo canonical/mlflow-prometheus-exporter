@@ -4,58 +4,50 @@
 #
 #    pip-compile ./requirements-lint.in
 #
-black==23.3.0
-    # via -r requirements-fmt.txt
-click==8.1.4
-    # via
-    #   -r requirements-fmt.txt
-    #   black
-codespell==2.2.5
+black==26.5.1
+    # via -r requirements-fmt.in
+click==8.4.2
+    # via black
+codespell==2.4.2
     # via -r requirements-lint.in
-flake8==6.0.0
+flake8==7.0.0
     # via
     #   -r requirements-lint.in
     #   flake8-builtins
     #   flake8-docstrings
     #   pep8-naming
     #   pyproject-flake8
-flake8-builtins==2.1.0
+flake8-builtins==3.1.0
     # via -r requirements-lint.in
 flake8-copyright==0.2.4
     # via -r requirements-lint.in
 flake8-docstrings==1.7.0
     # via -r requirements-lint.in
-isort==5.12.0
-    # via -r requirements-fmt.txt
+isort==8.0.1
+    # via -r requirements-fmt.in
 mccabe==0.7.0
     # via flake8
-mypy-extensions==1.0.0
-    # via
-    #   -r requirements-fmt.txt
-    #   black
-packaging==23.1
-    # via
-    #   -r requirements-fmt.txt
-    #   black
-pathspec==0.11.1
-    # via
-    #   -r requirements-fmt.txt
-    #   black
-pep8-naming==0.13.3
+mypy-extensions==1.1.0
+    # via black
+packaging==26.2
+    # via black
+pathspec==1.1.1
+    # via black
+pep8-naming==0.15.1
     # via -r requirements-lint.in
-platformdirs==3.8.1
-    # via
-    #   -r requirements-fmt.txt
-    #   black
-pycodestyle==2.10.0
+platformdirs==4.10.0
+    # via black
+pycodestyle==2.11.1
     # via flake8
 pydocstyle==6.3.0
     # via flake8-docstrings
-pyflakes==3.0.1
+pyflakes==3.2.0
     # via flake8
-pyproject-flake8==6.0.0.post1
+pyproject-flake8==7.0.0
     # via -r requirements-lint.in
-snowballstemmer==2.2.0
+pytokens==0.4.1
+    # via black
+snowballstemmer==3.1.1
     # via pydocstyle
 
 # The following packages are considered to be unsafe in a requirements file:
