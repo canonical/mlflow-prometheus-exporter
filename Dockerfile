@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ARG VERSION
 
 ENV TZ=UTC
@@ -14,7 +14,7 @@ RUN set -eux; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    python3.10 \
+    python3.12 \
     python3-pip \
     tzdata; \
     DEBIAN_FRONTEND=noninteractive apt-get remove --purge --auto-remove -y; \

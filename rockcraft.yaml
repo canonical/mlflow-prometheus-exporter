@@ -8,9 +8,9 @@ description: |
   enhance observability and streamline monitoring and analysis workflows for MLflow using 
   Prometheus and the Observability Stack.
 
-version: "v1.0.0_22.04_1"
+version: "v1.0.0_24.04_1"
 license: Apache-2.0
-build-base: ubuntu:22.04
+build-base: ubuntu:24.04
 base: bare
 platforms:
   amd64:
@@ -36,8 +36,8 @@ parts:
     source: .
     plugin: python
     stage-packages:
-    - python3.10
-    - python3.10-venv
+    - python3.12
+    - python3.12-venv
     - tzdata
     python-requirements:
     - requirements.txt

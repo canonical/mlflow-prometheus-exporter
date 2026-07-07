@@ -52,7 +52,7 @@ This repository contains also `rockcraft.yaml` which can be used to build rock o
    ```
 3. Copy the resulted rock to your local Docker registry 
    ```
-   sudo skopeo --insecure-policy copy oci-archive:mlflow-prometheus-exporter_v1.0.0_22.04_amd64.rock docker-daemon:<registry_user>/mlflow-prometheus-exporter:tag
+   sudo skopeo --insecure-policy copy oci-archive:mlflow-prometheus-exporter_v1.0.0_24.04_amd64.rock docker-daemon:<registry_user>/mlflow-prometheus-exporter:tag
    ```
 4. Now you can locally run it using Docker daemon
    ```
