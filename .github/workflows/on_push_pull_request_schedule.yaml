@@ -16,7 +16,9 @@ jobs:
     needs: integrate
     if: ${{ needs.integrate.result == 'success' }}
     permissions:
+      id-token: write
       contents: write
+      security-events: write
     uses: ./.github/workflows/build_and_publish_call.yaml
     secrets:
       DOCKER_HUB_CHARMED_USERNAME: ${{ secrets.DOCKER_HUB_CHARMED_USERNAME }}
