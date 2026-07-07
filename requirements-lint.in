@@ -5,4 +5,4 @@ flake8-copyright
 flake8-docstrings
 pep8-naming
 pyproject-flake8
--r requirements-fmt.txt
+-r requirements-fmt.in
