@@ -15,10 +15,15 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     python3.12 \
+    python3.12-venv \
     python3-pip \
     tzdata; \
     DEBIAN_FRONTEND=noninteractive apt-get remove --purge --auto-remove -y; \
     rm -rf /var/lib/apt/lists/*
+
+# create an isolated virtual environment to avoid PEP 668 externally-managed errors
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
