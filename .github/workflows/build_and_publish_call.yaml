@@ -51,7 +51,7 @@ jobs:
         run: |
           docker run --rm -it -p 8000:8000 -d ${{ vars.DOCKER_HUB_CHARMED_IMAGE }}:${{ github.sha }}
           sleep 5
-          curl -I --fail localhost:8000
+          curl -v --fail localhost:8000
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
