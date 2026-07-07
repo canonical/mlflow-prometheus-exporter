@@ -8,11 +8,6 @@ on:
         default: "1.0"
         type: string
         required: false
-    secrets:
-      DOCKER_HUB_CHARMED_USERNAME:
-        required: true
-      DOCKER_HUB_CHARMED_ACCESS_TOKEN:
-        required: true
   workflow_call:
     inputs:
       version:
