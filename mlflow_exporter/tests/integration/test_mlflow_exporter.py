@@ -25,7 +25,7 @@ def exporter_server():
     exporter_process = subprocess.Popen(
         [
             "python",
-            "mlflow_exporter/mlflow_exporter.py",
+            "mlflow_exporter.py",
             "--mlflowurl",
             TEST_MLFLOW_URL,
             "-t",

@@ -1,0 +1,6 @@
+integrations:
+  - consumer-repository: https://github.com/canonical/mlflow-operator.git
+
+    replace-image:
+      - file: metadata.yaml
+        path: resources.exporter-oci-image.upstream-source

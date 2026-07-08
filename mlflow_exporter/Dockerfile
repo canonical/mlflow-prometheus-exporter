@@ -28,7 +28,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-COPY mlflow_exporter /app
+COPY mlflow_exporter.py /app/
 
 EXPOSE 8000
 CMD ["python3", "mlflow_exporter.py"]

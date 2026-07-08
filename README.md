@@ -27,7 +27,7 @@ If you prefer to build the Docker image locally, you can follow these steps:
 2. Build the Docker image:
 
    ```shell
-   docker build -t mlflow-prometheus-exporter .
+   docker build -t mlflow-prometheus-exporter mlflow_exporter
    ```
 
 3. Run a container using the built image:
@@ -48,6 +48,7 @@ This repository contains also `rockcraft.yaml` which can be used to build rock o
    ```
 2. Build the rock 
    ```
+   cd mlflow_exporter
    rockcraft clean && rockcraft pack --verbosity=trace
    ```
 3. Copy the resulted rock to your local Docker registry 

@@ -1,0 +1,20 @@
+name: Scan images
+
+on:
+  schedule:
+    - cron: '00 23 * * *'
+  workflow_dispatch:
+
+jobs:
+
+  scan-images:
+    name: Scan published images and report vulnerabilities
+    uses: canonical/charmed-kubeflow-workflows/.github/workflows/get-published-images-scan-and-report.yaml@main
+    strategy:
+      matrix:
+        branch: [main]
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    with:
+      severity: "HIGH,CRITICAL"
+      branch: ${{ matrix.branch }}

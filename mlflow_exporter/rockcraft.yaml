@@ -43,4 +43,4 @@ parts:
     - requirements.txt
     override-build: |
       craftctl default
-      cp mlflow_exporter/mlflow_exporter.py $CRAFT_PART_INSTALL
+      cp mlflow_exporter.py $CRAFT_PART_INSTALL
