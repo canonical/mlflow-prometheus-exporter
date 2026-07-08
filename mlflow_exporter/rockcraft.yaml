@@ -10,8 +10,7 @@ description: |
 
 version: "v1.0.0_24.04_1"
 license: Apache-2.0
-build-base: ubuntu:24.04
-base: bare
+base: ubuntu@24.04
 platforms:
   amd64:
 run-user: _daemon_
