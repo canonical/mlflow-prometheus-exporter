@@ -3,7 +3,7 @@
 # See LICENSE file for licensing details.
 #
 
-"""Integration tests for testing mlflow exporter with local MLflow server."""
+"""Sanity tests running the mlflow exporter against a local MLflow server."""
 
 import subprocess
 
