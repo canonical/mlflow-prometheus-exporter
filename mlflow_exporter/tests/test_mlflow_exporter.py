@@ -31,23 +31,30 @@ EXPORTER_CONTAINER = "mlflow-exporter-sanity"
 MLFLOW_URL = f"http://localhost:{MLFLOW_PORT}/"
 
 # Register a model on the tracking server so that `num_registered_models` becomes 1.
-# Creating a version from a bogus URI is expected to fail; only the registered model
-# itself needs to exist for the metric.
+# This needs a database-backed store (the server is started with a SQLite backend); the
+# file-based default store does not support the model registry.
 REGISTER_MODEL_SCRIPT = f"""
-import mlflow
-from mlflow.exceptions import RestException
+from mlflow import MlflowClient
 
-mlflow.set_tracking_uri("{MLFLOW_URL}")
-try:
-    mlflow.register_model("model_name", "model_uri")
-except RestException:
-    pass
+MlflowClient(tracking_uri="{MLFLOW_URL}").create_registered_model("sanity-test-model")
 """
 
 
 def _remove_container(name):
     """Best-effort removal of a container, ignoring errors if it does not exist."""
     subprocess.run(["docker", "rm", "--force", name], check=False)
+
+
+def _dump_container_logs(name):
+    """Print a container's logs to help debug readiness failures in CI."""
+    logs = subprocess.run(
+        ["docker", "logs", name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print(f"----- docker logs {name} (stdout) -----\n{logs.stdout}")
+    print(f"----- docker logs {name} (stderr) -----\n{logs.stderr}")
 
 
 @pytest.fixture
@@ -65,6 +72,9 @@ def exporter_server(rock_image):
     _remove_container(EXPORTER_CONTAINER)
 
     # The rock bundles the full mlflow distribution, so its `mlflow` CLI can serve.
+    # Run from a writable working directory and use a SQLite backend store: the default
+    # file-based store is created under the image root (not writable by the service) and
+    # does not support the model registry, either of which stops the server from serving.
     subprocess.run(
         [
             "docker",
@@ -74,6 +84,8 @@ def exporter_server(rock_image):
             MLFLOW_SERVER_CONTAINER,
             "--network",
             "host",
+            "--workdir",
+            "/tmp",
             "--entrypoint",
             "mlflow",
             rock_image,
@@ -82,11 +94,17 @@ def exporter_server(rock_image):
             "0.0.0.0",
             "--port",
             str(MLFLOW_PORT),
+            "--backend-store-uri",
+            "sqlite:////tmp/mlflow.db",
         ],
         check=True,
     )
     try:
-        _wait_for_mlflow_server()
+        try:
+            _wait_for_mlflow_server()
+        except Exception:
+            _dump_container_logs(MLFLOW_SERVER_CONTAINER)
+            raise
 
         # Create a registered model inside the container, using the rock's own mlflow.
         subprocess.run(
@@ -131,7 +149,7 @@ def exporter_server(rock_image):
         _remove_container(MLFLOW_SERVER_CONTAINER)
 
 
-@retry(stop=stop_after_delay(60), wait=wait_fixed(2))
+@retry(stop=stop_after_delay(120), wait=wait_fixed(2))
 def _wait_for_mlflow_server():
     """Wait until the MLflow tracking server is ready to serve requests."""
     requests.get(f"http://localhost:{MLFLOW_PORT}/health").raise_for_status()
@@ -154,7 +172,11 @@ def _verify_metrics():
 
 def test_exporter_reports_mlflow_metrics(exporter_server):
     """The exporter serves metrics collected from the local MLflow server."""
-    _verify_metrics()
+    try:
+        _verify_metrics()
+    except Exception:
+        _dump_container_logs(EXPORTER_CONTAINER)
+        raise
 
 
 if __name__ == "__main__":
