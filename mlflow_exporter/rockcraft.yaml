@@ -35,8 +35,9 @@ parts:
     source: .
     plugin: python
     stage-packages:
-    - python3.12
-    - python3.12-venv
+    # This pulls the default Python interpreter for Ubuntu 24.04 -> 3.12,
+    # including the /usr/bin/python3 symlink the built venv relies on.
+    - python3-venv
     - tzdata
     python-requirements:
     - requirements.txt
