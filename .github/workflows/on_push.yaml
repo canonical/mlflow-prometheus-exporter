@@ -1,0 +1,16 @@
+name: On Push
+
+on:
+  push:
+    branches:
+    - main
+    - track/**
+
+jobs:
+
+  on-push:
+    name: Get rocks modified and build-scan-test-publish them
+    uses: canonical/charmed-kubeflow-workflows/.github/workflows/get-rocks-modified-and-build-scan-test-publish.yaml@main
+    permissions:
+      pull-requests: read
+    secrets: inherit

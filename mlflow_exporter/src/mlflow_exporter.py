@@ -19,7 +19,9 @@ def collect_metrics():
     """Collect MLflow data and update Prometheus metrics."""
     num_registered_models = len(mlflow.search_registered_models())
     num_experiments = len(mlflow.search_experiments())
-    num_runs = len(mlflow.search_runs())
+    # NOTE: passing `search_all_experiments=True` is necessary to avoid defaulting only to the
+    # active experiment, so that this metric is server-wide as well, and not experiment-specific:
+    num_runs = len(mlflow.search_runs(search_all_experiments=True))
 
     # Update Prometheus metrics
     mlflow_metric.labels(metric_name="num_registered_models").set(num_registered_models)

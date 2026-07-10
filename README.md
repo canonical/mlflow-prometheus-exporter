@@ -27,7 +27,7 @@ If you prefer to build the Docker image locally, you can follow these steps:
 2. Build the Docker image:
 
    ```shell
-   docker build -t mlflow-prometheus-exporter .
+   docker build -t mlflow-prometheus-exporter mlflow_exporter
    ```
 
 3. Run a container using the built image:
@@ -48,11 +48,20 @@ This repository contains also `rockcraft.yaml` which can be used to build rock o
    ```
 2. Build the rock 
    ```
+   cd mlflow_exporter
+   # Export the locked runtime dependencies to src/requirements.txt (consumed by the rock build)
+   # and pack the rock. Requires poetry and the poetry-plugin-export plugin.
+   tox -e pack
+   ```
+   Alternatively, export the requirements manually and run rockcraft directly:
+   ```
+   cd mlflow_exporter
+   poetry export --directory src --only main --without-hashes --format requirements.txt --output requirements.txt
    rockcraft clean && rockcraft pack --verbosity=trace
    ```
 3. Copy the resulted rock to your local Docker registry 
    ```
-   sudo skopeo --insecure-policy copy oci-archive:mlflow-prometheus-exporter_v1.0.0_22.04_amd64.rock docker-daemon:<registry_user>/mlflow-prometheus-exporter:tag
+   sudo skopeo --insecure-policy copy oci-archive:mlflow-prometheus-exporter_3.14.0_amd64.rock docker-daemon:<registry_user>/mlflow-prometheus-exporter:tag
    ```
 4. Now you can locally run it using Docker daemon
    ```
@@ -73,8 +82,8 @@ The MLflow Prometheus Exporter can be configured using environment variables:
 
 Example ussage: 
 ```
-python mlflow_exporter.py -p 8999 -u http://localhost:31380/ -t 30
-PORT=8000 MLFLOW_URL=http://localhost:31380/ TIMEOUT=20 python mlflow_exporter.py
+python src/mlflow_exporter.py -p 8999 -u http://localhost:31380/ -t 30
+PORT=8000 MLFLOW_URL=http://localhost:31380/ TIMEOUT=20 python src/mlflow_exporter.py
 ```
 
 ## Contributing

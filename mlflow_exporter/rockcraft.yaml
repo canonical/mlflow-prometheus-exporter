@@ -8,10 +8,9 @@ description: |
   enhance observability and streamline monitoring and analysis workflows for MLflow using 
   Prometheus and the Observability Stack.
 
-version: "v1.0.0_22.04_1"
+version: "3.14.0"
 license: Apache-2.0
-build-base: ubuntu:22.04
-base: bare
+base: ubuntu@24.04
 platforms:
   amd64:
 run-user: _daemon_
@@ -33,14 +32,15 @@ parts:
        > ${CRAFT_PART_INSTALL}/usr/share/rocks/dpkg.query
 
   mlflow:
-    source: .
+    source: src
     plugin: python
     stage-packages:
-    - python3.10
-    - python3.10-venv
+    # This pulls the default Python interpreter for Ubuntu 24.04 -> 3.12,
+    # including the /usr/bin/python3 symlink the built venv relies on.
+    - python3-venv
     - tzdata
     python-requirements:
     - requirements.txt
     override-build: |
       craftctl default
-      cp mlflow_exporter/mlflow_exporter.py $CRAFT_PART_INSTALL
+      cp mlflow_exporter.py $CRAFT_PART_INSTALL
