@@ -32,7 +32,7 @@ parts:
        > ${CRAFT_PART_INSTALL}/usr/share/rocks/dpkg.query
 
   mlflow:
-    source: .
+    source: src
     plugin: python
     stage-packages:
     # This pulls the default Python interpreter for Ubuntu 24.04 -> 3.12,

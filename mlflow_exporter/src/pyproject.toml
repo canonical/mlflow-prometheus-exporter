@@ -1,0 +1,59 @@
+# Copyright 2023 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+[project]
+name = "mlflow-prometheus-exporter"
+version = "3.14.0"
+description = "Prometheus Python exporter for MLflow servers."
+license = "Apache-2.0"
+requires-python = ">=3.10,<4.0"
+# Runtime dependencies of the application (installed into the rock).
+# Exported to requirements.txt via `poetry export --only main` (see the tox `pack` env).
+dependencies = [
+    "mlflow==3.14.0",
+    "prometheus-client>=0.25.0",
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.fmt]
+optional = true
+
+[tool.poetry.group.fmt.dependencies]
+black = "^24.8.0"
+isort = "^5.13.2"
+
+[tool.poetry.group.lint]
+optional = true
+
+[tool.poetry.group.lint.dependencies]
+black = "^24.8.0"
+codespell = "^2.3.0"
+flake8 = "7.0.0"
+flake8-builtins = "^2.5.0"
+flake8-copyright = "^0.2.4"
+flake8-docstrings = "^1.7.0"
+isort = "^5.13.2"
+pep8-naming = "^0.14.1"
+pyproject-flake8 = "^7.0.0"
+
+[tool.poetry.group.integration]
+optional = true
+
+[tool.poetry.group.integration.dependencies]
+charmed-kubeflow-chisme = "*"
+pytest = "^8.3.4"
+requests = "^2.32.3"
+tenacity = "^9.0.0"
+
+# Formatting and linting tools configuration
+[tool.black]
+line-length = 100
+
+[tool.isort]
+line_length = 100
+profile = "black"
+
+[tool.flake8]
+max-line-length = 100
