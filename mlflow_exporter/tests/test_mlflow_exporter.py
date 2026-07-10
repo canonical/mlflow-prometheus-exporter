@@ -152,13 +152,13 @@ def exporter_server(rock_image):
 @retry(stop=stop_after_delay(120), wait=wait_fixed(2))
 def _wait_for_mlflow_server():
     """Wait until the MLflow tracking server is ready to serve requests."""
-    requests.get(f"http://localhost:{MLFLOW_PORT}/health").raise_for_status()
+    requests.get(f"http://localhost:{MLFLOW_PORT}/health", timeout=5).raise_for_status()
 
 
 @retry(stop=stop_after_delay(60), wait=wait_fixed(2))
 def _verify_metrics():
     """Poll the exporter until it reports the expected MLflow metrics."""
-    response = requests.get(f"http://localhost:{EXPORTER_PORT}/metrics")
+    response = requests.get(f"http://localhost:{EXPORTER_PORT}/metrics", timeout=5)
     response.raise_for_status()
     metrics_text = response.text
 
