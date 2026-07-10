@@ -8,13 +8,6 @@ import subprocess
 import pytest
 from charmed_kubeflow_chisme.rock import CheckRock
 
-# rockcraft's python plugin creates the virtual environment at the root of the
-# rock, so on the usrmerged ubuntu@24.04 base the venv interpreter is the single
-# "python3" on PATH. It is the interpreter that can import mlflow and
-# prometheus_client, and it is what the charm invokes when it overrides the
-# Pebble command with "python3 mlflow_exporter.py ...".
-PYTHON = "python3"
-
 
 @pytest.mark.abort_on_fail
 def test_rock():
@@ -30,7 +23,7 @@ def test_rock():
             "run",
             "--rm",
             "--entrypoint",
-            PYTHON,
+            "python3",
             local_rock_image,
             "/mlflow_exporter.py",
             "--help",
