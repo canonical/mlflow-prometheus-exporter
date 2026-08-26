@@ -3,14 +3,14 @@
 
 [project]
 name = "mlflow-prometheus-exporter"
-version = "3.14.0"
+version = "3.15.1"
 description = "Prometheus Python exporter for MLflow servers."
 license = "Apache-2.0"
 requires-python = ">=3.10,<4.0"
 # Runtime dependencies of the application (installed into the rock).
 # Exported to requirements.txt via `poetry export --only main` (see the tox `pack` env).
 dependencies = [
-    "mlflow==3.14.0",
+    "mlflow==3.15.1",
     "prometheus-client>=0.25.0",
 ]
 
