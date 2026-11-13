@@ -61,7 +61,9 @@ def _get_from_tracking_server(url: str) -> str:
         ).decode()
         headers["Authorization"] = f"Basic {credentials}"
 
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(url)
+    if "Authorization" in headers:
+        request.add_unredirected_header("Authorization", headers["Authorization"])
     with urllib.request.urlopen(
         request, timeout=TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS
     ) as response:
