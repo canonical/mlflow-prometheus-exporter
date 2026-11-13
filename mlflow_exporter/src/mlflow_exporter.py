@@ -10,12 +10,17 @@ import base64
 import json
 import logging
 import os
+import ssl
 import time
 import urllib.error
 import urllib.request
 
 import mlflow
 from mlflow import MlflowClient
+from mlflow.environment_variables import (
+    MLFLOW_TRACKING_CLIENT_CERT_PATH,
+    MLFLOW_TRACKING_SERVER_CERT_PATH,
+)
 from prometheus_client import REGISTRY, start_http_server
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.parser import text_string_to_metric_families
@@ -64,8 +69,11 @@ def _get_from_tracking_server(url: str) -> str:
     request = urllib.request.Request(url)
     if "Authorization" in headers:
         request.add_unredirected_header("Authorization", headers["Authorization"])
+    ssl_context = ssl.create_default_context(cafile=MLFLOW_TRACKING_SERVER_CERT_PATH.get())
+    if client_cert_path := MLFLOW_TRACKING_CLIENT_CERT_PATH.get():
+        ssl_context.load_cert_chain(client_cert_path)
     with urllib.request.urlopen(
-        request, timeout=TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS
+        request, timeout=TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS, context=ssl_context
     ) as response:
         return response.read().decode("utf-8")
 
