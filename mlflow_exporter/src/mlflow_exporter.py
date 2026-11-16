@@ -52,7 +52,7 @@ METRIC_NAMES = (
 
 
 def _get_from_tracking_server(url: str) -> str:
-    """Return the body of a GET request to the tracking server.
+    """Return the body of the response to a GET request to the tracking server.
 
     Basic authentication is used if the MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD
     environment variables have been set, in the same way as the MLflow client does.
