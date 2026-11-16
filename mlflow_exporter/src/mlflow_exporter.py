@@ -6,16 +6,13 @@
 """Run MLflow prometheus exporter server."""
 
 import argparse
-import base64
 import json
 import logging
 import os
-import ssl
 import time
-import urllib.error
-import urllib.request
 
 import mlflow
+import requests
 from mlflow import MlflowClient
 from mlflow.environment_variables import (
     MLFLOW_TRACKING_CLIENT_CERT_PATH,
@@ -57,25 +54,18 @@ def _get_from_tracking_server(url: str) -> str:
     Basic authentication is used if the MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD
     environment variables have been set, in the same way as the MLflow client does.
     """
-    headers = {}
     username = os.getenv(MLFLOW_TRACKING_USERNAME_ENV_VAR)
     password = os.getenv(MLFLOW_TRACKING_PASSWORD_ENV_VAR)
-    if username and password:
-        credentials = base64.standard_b64encode(
-            f"{username}:{password}".encode()
-        ).decode()
-        headers["Authorization"] = f"Basic {credentials}"
-
-    request = urllib.request.Request(url)
-    if "Authorization" in headers:
-        request.add_unredirected_header("Authorization", headers["Authorization"])
-    ssl_context = ssl.create_default_context(cafile=MLFLOW_TRACKING_SERVER_CERT_PATH.get())
-    if client_cert_path := MLFLOW_TRACKING_CLIENT_CERT_PATH.get():
-        ssl_context.load_cert_chain(client_cert_path)
-    with urllib.request.urlopen(
-        request, timeout=TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS, context=ssl_context
-    ) as response:
-        return response.read().decode("utf-8")
+    response = requests.get(
+        url,
+        auth=(username, password) if username and password else None,
+        # verifying the server against the default CA bundle unless a custom one is configured:
+        verify=MLFLOW_TRACKING_SERVER_CERT_PATH.get() or True,
+        cert=MLFLOW_TRACKING_CLIENT_CERT_PATH.get(),
+        timeout=TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return response.text
 
 
 class TrackingServerMetricsCollector:
@@ -172,9 +162,9 @@ def _workspaces_enabled(mlflow_url: str) -> bool:
     server_info_url = f"{mlflow_url.rstrip('/')}/{TRACKING_SERVER_INFO_PATH}"
     try:
         server_info = json.loads(_get_from_tracking_server(server_info_url))
-    except urllib.error.HTTPError as error:
+    except requests.HTTPError as error:
         # same as the MLflow client, for older servers lacking this endpoint (and workspaces):
-        if error.code == 404:
+        if error.response is not None and error.response.status_code == 404:
             return False
         raise
     return bool(server_info.get("workspaces_enabled", False))
