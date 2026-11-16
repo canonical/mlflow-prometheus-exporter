@@ -33,7 +33,7 @@ from tenacity import retry, stop_after_delay, wait_fixed
 MLFLOW_SERVER_IMAGE = "docker.io/charmedkubeflow/mlflow:3.15.1-8865b4c-20260831104222"
 MLFLOW_PORT = 5000
 EXPORTER_PORT = 8999
-EXPORTER_TIMEOUT = 5
+EXPORTER_POLLING_INTERVAL = 5
 MLFLOW_SERVER_CONTAINER = "mlflow-server-sanity"
 EXPORTER_CONTAINER = "mlflow-exporter-sanity"
 MLFLOW_URL = f"http://localhost:{MLFLOW_PORT}/"
@@ -206,8 +206,8 @@ def exporter_server(rock_image, workspaces_enabled):
                 MLFLOW_URL,
                 "-p",
                 str(EXPORTER_PORT),
-                "-t",
-                str(EXPORTER_TIMEOUT),
+                "-i",
+                str(EXPORTER_POLLING_INTERVAL),
             ],
             check=True,
         )

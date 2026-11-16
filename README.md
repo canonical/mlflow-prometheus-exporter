@@ -78,13 +78,19 @@ The MLflow Prometheus Exporter can be configured using environment variables:
 
 - `PORT`: The port on which the exporter server will run (default: `8000`).
 - `MLFLOW_URL`: The MLflow server URL for collecting data (default: `http://localhost:5000/`).
-- `TIMEOUT`: The timeout for polling new metrics in seconds (default: `30`).
+- `POLLING_INTERVAL`: The interval between polls of new metrics in seconds (default: `30`).
+  `TIMEOUT` is still accepted as a deprecated alias.
 - `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD`: The credentials to authenticate to the MLflow server with [Basic auth](https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/#using-environment-variables), both for collecting data and for fetching its traffic metrics (default: unset, i.e. no authentication).
+
+The port, the MLflow server URL and the polling interval can also be passed as command-line
+arguments, which take precedence over the environment variables: `--port`/`-p`,
+`--mlflowurl`/`-u` and `--polling-interval`/`-i` (with `--timeout`/`-t` still accepted as a
+deprecated alias of the latter).
 
 Example ussage: 
 ```
-python src/mlflow_exporter.py -p 8999 -u http://localhost:31380/ -t 30
-PORT=8000 MLFLOW_URL=http://localhost:31380/ TIMEOUT=20 python src/mlflow_exporter.py
+python src/mlflow_exporter.py -p 8999 -u http://localhost:31380/ -i 30
+PORT=8000 MLFLOW_URL=http://localhost:31380/ POLLING_INTERVAL=20 python src/mlflow_exporter.py
 MLFLOW_TRACKING_USERNAME=<username> MLFLOW_TRACKING_PASSWORD=<password> python src/mlflow_exporter.py -u http://localhost:31380/
 ```
 
@@ -92,7 +98,7 @@ MLFLOW_TRACKING_USERNAME=<username> MLFLOW_TRACKING_PASSWORD=<password> python s
 
 The exporter serves the following metrics on its `/metrics` endpoint:
 
-- Counts of MLflow resources, collected through the MLflow API every `TIMEOUT` seconds, for each of the following metric names:
+- Counts of MLflow resources, collected through the MLflow API every `POLLING_INTERVAL` seconds, for each of the following metric names:
   - `num_experiments`: the number of experiments.
   - `num_runs`: the number of runs.
   - `num_registered_models`: the number of registered models (excluding prompts).

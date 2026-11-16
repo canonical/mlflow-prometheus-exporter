@@ -33,6 +33,8 @@ TRACKING_SERVER_INFO_PATH = "api/3.0/mlflow/server-info"
 # Upper bound on the exporter's own requests to the tracking server, as the traffic metrics are
 # fetched while serving a scrape of the exporter (whose default timeout in Prometheus is 10s):
 TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS = 5
+# Default interval between polls of the counts of MLflow resources:
+DEFAULT_POLLING_INTERVAL_SECONDS = 30
 # The environment variables the MLflow client reads its Basic auth credentials from:
 MLFLOW_TRACKING_USERNAME_ENV_VAR = "MLFLOW_TRACKING_USERNAME"
 MLFLOW_TRACKING_PASSWORD_ENV_VAR = "MLFLOW_TRACKING_PASSWORD"
@@ -274,6 +276,25 @@ def collect_metrics(mlflow_url: str) -> tuple:
     return deployment_counts, workspace_counts
 
 
+def resolve_polling_interval(args: argparse.Namespace) -> int:
+    """Return the polling interval in seconds, honoring the deprecated timeout settings.
+
+    The command-line arguments take precedence over the environment variables, and the current
+    names over the deprecated ones, which are only kept for backward compatibility.
+    """
+    if args.polling_interval is not None:
+        return args.polling_interval
+    if args.timeout is not None:
+        logger.warning("--timeout/-t is deprecated, use --polling-interval/-i instead")
+        return args.timeout
+    if (polling_interval := os.getenv("POLLING_INTERVAL")) is not None:
+        return int(polling_interval)
+    if (timeout := os.getenv("TIMEOUT")) is not None:
+        logger.warning("TIMEOUT is deprecated, use POLLING_INTERVAL instead")
+        return int(timeout)
+    return DEFAULT_POLLING_INTERVAL_SECONDS
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -291,13 +312,19 @@ if __name__ == "__main__":
         default=os.getenv("MLFLOW_URL", "http://localhost:5000/"),
     )
     parser.add_argument(
-        "--timeout",
-        "-t",
+        "--polling-interval",
+        "-i",
         type=int,
-        help="Timeout for polling new metrics in seconds.",
-        default=os.getenv("TIMEOUT", 30),
+        help=(
+            "Interval between polls of new metrics in seconds (default: the POLLING_INTERVAL"
+            f" environment variable, or {DEFAULT_POLLING_INTERVAL_SECONDS})."
+        ),
     )
+    # deprecated alias of --polling-interval, kept for backward compatibility:
+    # TODO: remove --timeout/-t and the TIMEOUT environment variable in a future release
+    parser.add_argument("--timeout", "-t", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    polling_interval = resolve_polling_interval(args)
 
     mlflow.set_tracking_uri(args.mlflowurl)
 
@@ -318,4 +345,4 @@ if __name__ == "__main__":
             # not to report stale counts, and not to stop serving the other sources of metrics:
             logger.exception("Failed to collect metrics from the MLflow server")
             resources_collector.update({}, {})
-        time.sleep(args.timeout)  # Adjust the sleep duration as needed
+        time.sleep(polling_interval)
