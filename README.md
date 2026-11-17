@@ -80,12 +80,13 @@ The MLflow Prometheus Exporter can be configured using environment variables:
 - `MLFLOW_URL`: The MLflow server URL for collecting data (default: `http://localhost:5000/`).
 - `POLLING_INTERVAL`: The interval between polls of new metrics in seconds (default: `30`).
   `TIMEOUT` is still accepted as a deprecated alias.
+- `REQUEST_TIMEOUT`: The timeout in seconds of the exporter's own requests to the tracking server, i.e. to fetch its traffic metrics at each scrape and to check whether workspaces are enabled (default: `5`). It should be lower than the Prometheus scrape timeout (`10` seconds by default). The requests made through the MLflow client to count the resources are instead governed by MLflow's own [`MLFLOW_HTTP_REQUEST_TIMEOUT`](https://mlflow.org/docs/latest/python_api/mlflow.environment_variables.html).
 - `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD`: The credentials to authenticate to the MLflow server with [Basic auth](https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/#using-environment-variables), both for collecting data and for fetching its traffic metrics (default: unset, i.e. no authentication).
 
-The port, the MLflow server URL and the polling interval can also be passed as command-line
-arguments, which take precedence over the environment variables: `--port`/`-p`,
-`--mlflowurl`/`-u` and `--polling-interval`/`-i` (with `--timeout`/`-t` still accepted as a
-deprecated alias of the latter).
+The port, the MLflow server URL, the polling interval and the request timeout can also be passed
+as command-line arguments, which take precedence over the environment variables: `--port`/`-p`,
+`--mlflowurl`/`-u`, `--polling-interval`/`-i` and `--request-timeout` (with `--timeout`/`-t`
+still accepted as a deprecated alias of the polling interval).
 
 Example ussage: 
 ```

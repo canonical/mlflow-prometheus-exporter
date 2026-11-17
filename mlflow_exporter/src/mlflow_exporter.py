@@ -30,9 +30,9 @@ TRACKING_SERVER_METRICS_PATH = "metrics"
 # Path, relative to the MLflow server URL, of the tracking server's endpoint reporting its
 # capabilities, among which whether workspaces are enabled:
 TRACKING_SERVER_INFO_PATH = "api/3.0/mlflow/server-info"
-# Upper bound on the exporter's own requests to the tracking server, as the traffic metrics are
-# fetched while serving a scrape of the exporter (whose default timeout in Prometheus is 10s):
-TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS = 5
+# Default upper bound on the exporter's own requests to the tracking server, as the traffic metrics
+# are fetched while serving a scrape of the exporter (whose default timeout in Prometheus is 10s):
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 5
 # Default interval between polls of the counts of MLflow resources:
 DEFAULT_POLLING_INTERVAL_SECONDS = 30
 # The environment variables the MLflow client reads its Basic auth credentials from:
@@ -50,11 +50,17 @@ METRIC_NAMES = (
 )
 
 
-def _get_from_tracking_server(url: str) -> str:
+def _get_from_tracking_server(
+    url: str, timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+) -> str:
     """Return the body of the response to a GET request to the tracking server.
 
     Basic authentication is used if the MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD
     environment variables have been set, in the same way as the MLflow client does.
+
+    Args:
+        url: the URL to send the request to.
+        timeout: the timeout of the request in seconds.
     """
     username = os.getenv(MLFLOW_TRACKING_USERNAME_ENV_VAR)
     password = os.getenv(MLFLOW_TRACKING_PASSWORD_ENV_VAR)
@@ -64,7 +70,7 @@ def _get_from_tracking_server(url: str) -> str:
         # verifying the server against the default CA bundle unless a custom one is configured:
         verify=MLFLOW_TRACKING_SERVER_CERT_PATH.get() or True,
         cert=MLFLOW_TRACKING_CLIENT_CERT_PATH.get(),
-        timeout=TRACKING_SERVER_REQUEST_TIMEOUT_SECONDS,
+        timeout=timeout,
     )
     response.raise_for_status()
     return response.text
@@ -77,9 +83,12 @@ class TrackingServerMetricsCollector:
     without affecting the exporter's own metrics.
     """
 
-    def __init__(self, mlflow_url: str):
+    def __init__(
+        self, mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+    ):
         """Build the URL of the tracking server's metrics endpoint from the MLflow server URL."""
         self._metrics_url = f"{mlflow_url.rstrip('/')}/{TRACKING_SERVER_METRICS_PATH}"
+        self._request_timeout = request_timeout
 
     def describe(self):
         """Describe no metric upfront, so that registering this collector fetches nothing."""
@@ -92,7 +101,9 @@ class TrackingServerMetricsCollector:
             # a partial set of metrics (or an error) in the exporter's response:
             families = list(
                 text_string_to_metric_families(
-                    _get_from_tracking_server(self._metrics_url)
+                    _get_from_tracking_server(
+                        self._metrics_url, timeout=self._request_timeout
+                    )
                 )
             )
         except Exception as error:
@@ -155,7 +166,9 @@ class MlflowResourcesCollector:
         return [deployment_family, workspace_family]
 
 
-def _workspaces_enabled(mlflow_url: str) -> bool:
+def _workspaces_enabled(
+    mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+) -> bool:
     """Return whether the tracking server has workspaces enabled.
 
     The server's capabilities are queried directly, as the workspace APIs of a server without
@@ -163,7 +176,9 @@ def _workspaces_enabled(mlflow_url: str) -> bool:
     """
     server_info_url = f"{mlflow_url.rstrip('/')}/{TRACKING_SERVER_INFO_PATH}"
     try:
-        server_info = json.loads(_get_from_tracking_server(server_info_url))
+        server_info = json.loads(
+            _get_from_tracking_server(server_info_url, timeout=request_timeout)
+        )
     except requests.HTTPError as error:
         # same as the MLflow client, for older servers lacking this endpoint (and workspaces):
         if error.response is not None and error.response.status_code == 404:
@@ -245,7 +260,9 @@ def _count_resources(workspace: str | None) -> dict:
     return counts
 
 
-def collect_metrics(mlflow_url: str) -> tuple:
+def collect_metrics(
+    mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+) -> tuple:
     """Collect MLflow data, returning the deployment-level and the per-workspace counts.
 
     With workspaces enabled, the resources are counted in each workspace, and summed across them
@@ -255,7 +272,7 @@ def collect_metrics(mlflow_url: str) -> tuple:
     Basic authentication is automatically used if the MLFLOW_TRACKING_USERNAME
     and MLFLOW_TRACKING_PASSWORD environment variables have been set.
     """
-    if not _workspaces_enabled(mlflow_url):
+    if not _workspaces_enabled(mlflow_url, request_timeout=request_timeout):
         return _count_resources(workspace=None), {}
 
     workspace_counts = {}
@@ -320,6 +337,16 @@ if __name__ == "__main__":
             f" environment variable, or {DEFAULT_POLLING_INTERVAL_SECONDS})."
         ),
     )
+    parser.add_argument(
+        "--request-timeout",
+        type=float,
+        help=(
+            "Timeout in seconds of the exporter's own requests to the tracking server, i.e. to"
+            " fetch its traffic metrics and capabilities (default: the REQUEST_TIMEOUT environment"
+            f" variable, or {DEFAULT_REQUEST_TIMEOUT_SECONDS})."
+        ),
+        default=float(os.getenv("REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT_SECONDS)),
+    )
     # deprecated alias of --polling-interval, kept for backward compatibility:
     # TODO: remove --timeout/-t and the TIMEOUT environment variable in a future release
     parser.add_argument("--timeout", "-t", type=int, help=argparse.SUPPRESS)
@@ -332,7 +359,11 @@ if __name__ == "__main__":
     # alongside the exporter's own metrics
     resources_collector = MlflowResourcesCollector()
     REGISTRY.register(resources_collector)
-    REGISTRY.register(TrackingServerMetricsCollector(args.mlflowurl))
+    REGISTRY.register(
+        TrackingServerMetricsCollector(
+            args.mlflowurl, request_timeout=args.request_timeout
+        )
+    )
 
     # Start the Prometheus HTTP server
     start_http_server(args.port)
@@ -346,7 +377,9 @@ if __name__ == "__main__":
     # `TrackingServerMetricsCollector` fetches them synchronously on each scrape.
     while True:
         try:
-            resources_collector.update(*collect_metrics(args.mlflowurl))
+            resources_collector.update(
+                *collect_metrics(args.mlflowurl, request_timeout=args.request_timeout)
+            )
         except Exception:
             # not to report stale counts, and not to stop serving the other sources of metrics:
             logger.exception("Failed to collect metrics from the MLflow server")
