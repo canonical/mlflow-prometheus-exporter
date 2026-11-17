@@ -14,10 +14,8 @@ import time
 import mlflow
 import requests
 from mlflow import MlflowClient
-from mlflow.environment_variables import (
-    MLFLOW_TRACKING_CLIENT_CERT_PATH,
-    MLFLOW_TRACKING_SERVER_CERT_PATH,
-)
+from mlflow.utils.credentials import get_default_host_creds
+from mlflow.utils.rest_utils import http_request
 from prometheus_client import REGISTRY, start_http_server
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.parser import text_string_to_metric_families
@@ -39,10 +37,6 @@ DEFAULT_POLLING_INTERVAL_SECONDS = 30
 # Default level of the exporter's own logs:
 DEFAULT_LOG_LEVEL = "INFO"
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-# The environment variables the MLflow client reads its Basic auth credentials from:
-MLFLOW_TRACKING_USERNAME_ENV_VAR = "MLFLOW_TRACKING_USERNAME"
-MLFLOW_TRACKING_PASSWORD_ENV_VAR = "MLFLOW_TRACKING_PASSWORD"
-
 # Metrics counted in each workspace, and across all workspaces at the deployment level:
 METRIC_NAMES = (
     "num_experiments",
@@ -54,24 +48,25 @@ METRIC_NAMES = (
 )
 
 
-def _get_from_tracking_server(url: str, timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS) -> str:
+def _get_from_tracking_server(
+    tracking_server_url: str,
+    endpoint: str,
+    timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+) -> str:
     """Return the body of the response to a GET request to the tracking server.
 
-    Basic authentication is used if the MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD
-    environment variables have been set, in the same way as the MLflow client does.
+    Authentication and TLS settings are handled in the same way as the MLflow client.
 
     Args:
-        url: the URL to send the request to.
+        tracking_server_url: the URL of the tracking server.
+        endpoint: the path of the endpoint to send the request to.
         timeout: the timeout of the request in seconds.
     """
-    username = os.getenv(MLFLOW_TRACKING_USERNAME_ENV_VAR)
-    password = os.getenv(MLFLOW_TRACKING_PASSWORD_ENV_VAR)
-    response = requests.get(
-        url,
-        auth=(username, password) if username and password else None,
-        # verifying the server against the default CA bundle unless a custom one is configured:
-        verify=MLFLOW_TRACKING_SERVER_CERT_PATH.get() or True,
-        cert=MLFLOW_TRACKING_CLIENT_CERT_PATH.get(),
+    response = http_request(
+        get_default_host_creds(tracking_server_url),
+        f"/{endpoint}",
+        "GET",
+        max_retries=0,
         timeout=timeout,
     )
     response.raise_for_status()
@@ -87,6 +82,7 @@ class TrackingServerMetricsCollector:
 
     def __init__(self, mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS):
         """Build the URL of the tracking server's metrics endpoint from the MLflow server URL."""
+        self._mlflow_url = mlflow_url.rstrip("/")
         self._metrics_url = f"{mlflow_url.rstrip('/')}/{TRACKING_SERVER_METRICS_PATH}"
         self._request_timeout = request_timeout
 
@@ -101,7 +97,11 @@ class TrackingServerMetricsCollector:
             # a partial set of metrics (or an error) in the exporter's response:
             families = list(
                 text_string_to_metric_families(
-                    _get_from_tracking_server(self._metrics_url, timeout=self._request_timeout)
+                    _get_from_tracking_server(
+                        self._mlflow_url,
+                        TRACKING_SERVER_METRICS_PATH,
+                        timeout=self._request_timeout,
+                    )
                 )
             )
         except Exception as error:
@@ -172,10 +172,11 @@ def _workspaces_enabled(
     The server's capabilities are queried directly, as the workspace APIs of a server without
     workspaces respond with a 503 status code, which the MLflow client retries for minutes.
     """
-    server_info_url = f"{mlflow_url.rstrip('/')}/{TRACKING_SERVER_INFO_PATH}"
     try:
         server_info = json.loads(
-            _get_from_tracking_server(server_info_url, timeout=request_timeout)
+            _get_from_tracking_server(
+                mlflow_url, TRACKING_SERVER_INFO_PATH, timeout=request_timeout
+            )
         )
     except requests.HTTPError as error:
         # same as the MLflow client, for older servers lacking this endpoint (and workspaces):
@@ -257,8 +258,7 @@ def collect_metrics(
     for the deployment-level counts.
     Without workspaces, only the deployment-level counts are reported, counted server-wide.
 
-    Basic authentication is automatically used if the MLFLOW_TRACKING_USERNAME
-    and MLFLOW_TRACKING_PASSWORD environment variables have been set.
+    Authentication is handled in the same way as the MLflow client.
     """
     if not _workspaces_enabled(mlflow_url, request_timeout=request_timeout):
         return _count_resources(workspace=None), {}
