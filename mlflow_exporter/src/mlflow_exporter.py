@@ -6,27 +6,306 @@
 """Run MLflow prometheus exporter server."""
 
 import argparse
+import json
+import logging
 import os
 import time
 
 import mlflow
-from prometheus_client import Gauge, start_http_server
+import requests
+from mlflow import MlflowClient
+from mlflow.utils.credentials import get_default_host_creds
+from mlflow.utils.rest_utils import http_request
+from prometheus_client import REGISTRY, start_http_server
+from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.parser import text_string_to_metric_families
 
-mlflow_metric = Gauge("mlflow_metric", "MLflow metric", ["metric_name"])
+# named explicitly rather than after `__name__`, which is `__main__` when run as a script:
+logger = logging.getLogger("mlflow_exporter")
+
+# Path, relative to the MLflow server URL, of the tracking server's own Prometheus endpoint, serving
+# its traffic metrics when the server runs with `--expose-prometheus`:
+TRACKING_SERVER_METRICS_PATH = "metrics"
+# Path, relative to the MLflow server URL, of the tracking server's endpoint reporting its
+# capabilities, among which whether workspaces are enabled:
+TRACKING_SERVER_INFO_PATH = "api/3.0/mlflow/server-info"
+# Default upper bound on the exporter's own requests to the tracking server, as the traffic metrics
+# are fetched while serving a scrape of the exporter (whose default timeout in Prometheus is 10s):
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 5
+# Default interval between polls of the counts of MLflow resources:
+DEFAULT_POLLING_INTERVAL_SECONDS = 30
+# Default level of the exporter's own logs:
+DEFAULT_LOG_LEVEL = "INFO"
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+# Metrics counted in each workspace, and across all workspaces at the deployment level:
+METRIC_NAMES = (
+    "num_experiments",
+    "num_runs",
+    "num_registered_models",
+    "num_prompts",
+    "num_model_versions",
+    "num_logged_models",
+)
 
 
-def collect_metrics():
-    """Collect MLflow data and update Prometheus metrics."""
-    num_registered_models = len(mlflow.search_registered_models())
-    num_experiments = len(mlflow.search_experiments())
-    # NOTE: passing `search_all_experiments=True` is necessary to avoid defaulting only to the
-    # active experiment, so that this metric is server-wide as well, and not experiment-specific:
-    num_runs = len(mlflow.search_runs(search_all_experiments=True))
+def _get_from_tracking_server(
+    tracking_server_url: str,
+    endpoint: str,
+    timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+) -> str:
+    """Return the body of the response to a GET request to the tracking server.
 
-    # Update Prometheus metrics
-    mlflow_metric.labels(metric_name="num_registered_models").set(num_registered_models)
-    mlflow_metric.labels(metric_name="num_experiments").set(num_experiments)
-    mlflow_metric.labels(metric_name="num_runs").set(num_runs)
+    Authentication and TLS settings are handled in the same way as the MLflow client.
+
+    Args:
+        tracking_server_url: the URL of the tracking server.
+        endpoint: the path of the endpoint to send the request to.
+        timeout: the timeout of the request in seconds.
+    """
+    response = http_request(
+        get_default_host_creds(tracking_server_url),
+        f"/{endpoint}",
+        "GET",
+        max_retries=0,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response.text
+
+
+class TrackingServerMetricsCollector:
+    """Re-expose the traffic metrics served by the MLflow tracking server's `/metrics` endpoint.
+
+    A failure to fetch or parse them is logged and only leaves these metrics out of the scrape,
+    without affecting the exporter's own metrics.
+    """
+
+    def __init__(self, mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS):
+        """Build the URL of the tracking server's metrics endpoint from the MLflow server URL."""
+        self._mlflow_url = mlflow_url.rstrip("/")
+        self._metrics_url = f"{mlflow_url.rstrip('/')}/{TRACKING_SERVER_METRICS_PATH}"
+        self._request_timeout = request_timeout
+
+    def describe(self):
+        """Describe no metric upfront, so that registering this collector fetches nothing."""
+        return []
+
+    def collect(self):
+        """Yield the metric families currently served by the tracking server."""
+        try:
+            # parsing everything before yielding anything, so that a parsing failure never leaves
+            # a partial set of metrics (or an error) in the exporter's response:
+            families = list(
+                text_string_to_metric_families(
+                    _get_from_tracking_server(
+                        self._mlflow_url,
+                        TRACKING_SERVER_METRICS_PATH,
+                        timeout=self._request_timeout,
+                    )
+                )
+            )
+        except Exception as error:
+            logger.warning(
+                "Failed to collect the tracking server metrics from %s: %s",
+                self._metrics_url,
+                error,
+            )
+            return
+        yield from families
+
+
+class MlflowResourcesCollector:
+    """Expose the counts of MLflow resources, both deployment-level and per workspace.
+
+    The counts are polled periodically through the MLflow API, as counting them can be expensive,
+    and the latest ones are exposed at scrape time.
+    """
+
+    def __init__(self):
+        """Start with no counts, until the first poll."""
+        self._counts = ({}, {})
+
+    def update(self, deployment_counts: dict, workspace_counts: dict):
+        """Replace the exposed counts with newly polled ones.
+
+        Args:
+            deployment_counts: the deployment-level counts, by metric name.
+            workspace_counts: the counts of each workspace, by workspace name and metric name.
+        """
+        # replacing all the counts at once, as they are concurrently exposed by the HTTP server's
+        # thread, and dropping those no longer polled (e.g., of a deleted workspace) along the way:
+        self._counts = (deployment_counts, workspace_counts)
+
+    def describe(self):
+        """Describe the exposed metric families, without any samples."""
+        return list(self._build_families({}, {}))
+
+    def collect(self):
+        """Yield the metric families with the latest polled counts."""
+        return self._build_families(*self._counts)
+
+    @staticmethod
+    def _build_families(deployment_counts: dict, workspace_counts: dict):
+        deployment_family = GaugeMetricFamily(
+            "mlflow_metric", "MLflow metric", labels=["metric_name"]
+        )
+        for metric_name, count in deployment_counts.items():
+            deployment_family.add_metric([metric_name], count)
+
+        workspace_family = GaugeMetricFamily(
+            "mlflow_workspace_metric",
+            "MLflow metric per workspace",
+            labels=["metric_name", "workspace"],
+        )
+        for workspace, counts in workspace_counts.items():
+            for metric_name, count in counts.items():
+                workspace_family.add_metric([metric_name, workspace], count)
+
+        return [deployment_family, workspace_family]
+
+
+def _workspaces_enabled(
+    mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+) -> bool:
+    """Return whether the tracking server has workspaces enabled.
+
+    The server's capabilities are queried directly, as the workspace APIs of a server without
+    workspaces respond with a 503 status code, which the MLflow client retries for minutes.
+    """
+    try:
+        server_info = json.loads(
+            _get_from_tracking_server(
+                mlflow_url, TRACKING_SERVER_INFO_PATH, timeout=request_timeout
+            )
+        )
+    except requests.HTTPError as error:
+        # same as the MLflow client, for older servers lacking this endpoint (and workspaces):
+        if error.response is not None and error.response.status_code == 404:
+            return False
+        raise
+    return bool(server_info.get("workspaces_enabled", False))
+
+
+def _count_all(search_page) -> int:
+    """Count all the results of a paginated MLflow search.
+
+    The results are counted page by page, without any limit on their total number (unlike, e.g.,
+    `mlflow.search_runs`), and without holding them all in memory at once.
+
+    Args:
+        search_page: a function returning the page of search results for a given page token.
+    """
+    count = 0
+    page_token = None
+    while True:
+        page = search_page(page_token)
+        count += len(page)
+        page_token = page.token
+        if not page_token:
+            return count
+
+
+def _count_resources(workspace: str | None) -> dict:
+    """Count the MLflow resources of the active workspace, by metric name.
+
+    Each resource is counted independently: one failing to be counted is logged and left out of
+    the result, without affecting the others.
+    """
+    client = MlflowClient()
+    # NOTE: both registered models and model versions exclude prompts and their versions:
+    page_searches = {
+        "num_registered_models": lambda token: client.search_registered_models(page_token=token),
+        "num_prompts": lambda token: client.search_prompts(page_token=token),
+        "num_model_versions": lambda token: client.search_model_versions(page_token=token),
+    }
+    counts = {}
+    try:
+        experiment_ids = [experiment.experiment_id for experiment in mlflow.search_experiments()]
+    except Exception as error:
+        # Without experiment_ids, we can't search for runs or logged models
+        logger.warning(
+            "Failed to count num_experiments, num_runs, num_logged_models (workspace: %s): %s",
+            workspace,
+            error,
+        )
+    else:
+        counts["num_experiments"] = len(experiment_ids)
+        # Runs and logged models are only searched in a non-empty list of experiments:
+        if experiment_ids:
+            page_searches["num_runs"] = lambda token: client.search_runs(
+                experiment_ids, page_token=token
+            )
+            page_searches["num_logged_models"] = lambda token: client.search_logged_models(
+                experiment_ids, page_token=token
+            )
+        else:
+            counts["num_runs"] = counts["num_logged_models"] = 0
+
+    for metric_name, search_page in page_searches.items():
+        try:
+            counts[metric_name] = _count_all(search_page)
+        except Exception as error:
+            logger.warning("Failed to count %s (workspace: %s): %s", metric_name, workspace, error)
+    return counts
+
+
+def collect_metrics(
+    mlflow_url: str, request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+) -> tuple:
+    """Collect MLflow data, returning the deployment-level and the per-workspace counts.
+
+    With workspaces enabled, the resources are counted in each workspace, and summed across them
+    for the deployment-level counts.
+    Without workspaces, only the deployment-level counts are reported, counted server-wide.
+
+    Authentication is handled in the same way as the MLflow client.
+    """
+    if not _workspaces_enabled(mlflow_url, request_timeout=request_timeout):
+        return _count_resources(workspace=None), {}
+
+    workspace_counts = {}
+    try:
+        for workspace in mlflow.list_workspaces():
+            mlflow.set_workspace(workspace.name)
+            workspace_counts[workspace.name] = _count_resources(workspace=workspace.name)
+    finally:
+        mlflow.set_workspace(None)
+
+    deployment_counts = {}
+    for name in METRIC_NAMES:
+        failed_workspaces = [
+            workspace for workspace, counts in workspace_counts.items() if name not in counts
+        ]
+        if failed_workspaces:
+            # a partial sum would be misleading, so the total is left out of the result:
+            logger.warning(
+                "Not reporting the deployment-level %s, as it failed to be counted in the"
+                " workspaces: %s",
+                name,
+                ", ".join(failed_workspaces),
+            )
+            continue
+        deployment_counts[name] = sum(counts[name] for counts in workspace_counts.values())
+    return deployment_counts, workspace_counts
+
+
+def resolve_polling_interval(args: argparse.Namespace) -> int:
+    """Return the polling interval in seconds, honoring the deprecated timeout settings.
+
+    The command-line arguments take precedence over the environment variables, and the current
+    names over the deprecated ones, which are only kept for backward compatibility.
+    """
+    if args.polling_interval is not None:
+        return args.polling_interval
+    if args.timeout is not None:
+        logger.warning("--timeout/-t is deprecated, use --polling-interval/-i instead")
+        return args.timeout
+    if (polling_interval := os.getenv("POLLING_INTERVAL")) is not None:
+        return int(polling_interval)
+    if (timeout := os.getenv("TIMEOUT")) is not None:
+        logger.warning("TIMEOUT is deprecated, use POLLING_INTERVAL instead")
+        return int(timeout)
+    return DEFAULT_POLLING_INTERVAL_SECONDS
 
 
 if __name__ == "__main__":
@@ -46,20 +325,103 @@ if __name__ == "__main__":
         default=os.getenv("MLFLOW_URL", "http://localhost:5000/"),
     )
     parser.add_argument(
-        "--timeout",
-        "-t",
+        "--polling-interval",
+        "-i",
         type=int,
-        help="Timeout for polling new metrics in seconds.",
-        default=os.getenv("TIMEOUT", 30),
+        help=(
+            "Interval between polls of new metrics in seconds (default: the POLLING_INTERVAL"
+            f" environment variable, or {DEFAULT_POLLING_INTERVAL_SECONDS})."
+        ),
     )
+    parser.add_argument(
+        "--request-timeout",
+        type=float,
+        help=(
+            "Timeout in seconds of the exporter's own requests to the tracking server, i.e. to"
+            " fetch its traffic metrics and capabilities (default: the REQUEST_TIMEOUT environment"
+            f" variable, or {DEFAULT_REQUEST_TIMEOUT_SECONDS})."
+        ),
+        default=float(os.getenv("REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT_SECONDS)),
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str.upper,
+        choices=LOG_LEVELS,
+        help=(
+            "Level of the exporter's own logs (default: the LOG_LEVEL environment variable, or"
+            f" {DEFAULT_LOG_LEVEL})."
+        ),
+        default=os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper(),
+    )
+    # deprecated alias of --polling-interval, kept for backward compatibility:
+    # TODO: remove --timeout/-t and the TIMEOUT environment variable in a future release
+    parser.add_argument("--timeout", "-t", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    # Only the exporter's own logs follow the configured level, while those of the libraries it
+    # uses (e.g., urllib3) are kept to warnings and above, not to flood the logs when debugging
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logger.setLevel(args.log_level)
+
+    polling_interval = resolve_polling_interval(args)
 
     mlflow.set_tracking_uri(args.mlflowurl)
 
+    # Expose the counts of MLflow resources, and re-expose the tracking server's traffic metrics,
+    # alongside the exporter's own metrics
+    resources_collector = MlflowResourcesCollector()
+    REGISTRY.register(resources_collector)
+    REGISTRY.register(
+        TrackingServerMetricsCollector(args.mlflowurl, request_timeout=args.request_timeout)
+    )
+
     # Start the Prometheus HTTP server
     start_http_server(args.port)
+    logger.info(
+        "Serving metrics on port %d, polling the MLflow server at %s every %ds"
+        " (request timeout: %ss)",
+        args.port,
+        args.mlflowurl,
+        polling_interval,
+        args.request_timeout,
+    )
 
-    # Periodically collect and update the metrics
+    # Periodically collect and update the metrics.
+    # Only the MLflow resource counts are polled and cached, rather than computed at scrape time:
+    # Prometheus recommends synchronous scrapes
+    # (https://prometheus.io/docs/instrumenting/writing_exporters/#scheduling), but counting the
+    # resources is expensive and could exceed the Prometheus scrape timeout. The tracking server
+    # metrics, instead, are cheap to get (a single GET request to its `/metrics` endpoint), so
+    # `TrackingServerMetricsCollector` fetches them synchronously on each scrape.
     while True:
-        collect_metrics()
-        time.sleep(args.timeout)  # Adjust the sleep duration as needed
+        poll_start = time.monotonic()
+        try:
+            deployment_counts, workspace_counts = collect_metrics(
+                args.mlflowurl, request_timeout=args.request_timeout
+            )
+            resources_collector.update(deployment_counts, workspace_counts)
+            poll_duration = time.monotonic() - poll_start
+            logger.debug(
+                "Collected the MLflow resource counts in %.2fs: %s (per workspace: %s)",
+                poll_duration,
+                deployment_counts,
+                workspace_counts,
+            )
+            if poll_duration > polling_interval:
+                logger.warning(
+                    "Collecting the MLflow resource counts took %.2fs, longer than the polling"
+                    " interval of %ds: the counts are refreshed less often than configured",
+                    poll_duration,
+                    polling_interval,
+                )
+        except Exception:
+            # not to report stale counts, and not to stop serving the other sources of metrics:
+            logger.exception(
+                "Failed to collect the MLflow resource counts, so none of them (neither"
+                " deployment-level nor per workspace) is reported until the next poll"
+            )
+            resources_collector.update({}, {})
+        time.sleep(polling_interval)

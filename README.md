@@ -78,13 +78,44 @@ The MLflow Prometheus Exporter can be configured using environment variables:
 
 - `PORT`: The port on which the exporter server will run (default: `8000`).
 - `MLFLOW_URL`: The MLflow server URL for collecting data (default: `http://localhost:5000/`).
-- `TIMEOUT`: The timeout for polling new metrics in seconds (default: `30`).
+- `POLLING_INTERVAL`: The interval between polls of new metrics in seconds (default: `30`).
+  `TIMEOUT` is still accepted as a deprecated alias.
+- `REQUEST_TIMEOUT`: The timeout in seconds of the exporter's own requests to the tracking server, i.e. to fetch its traffic metrics at each scrape and to check whether workspaces are enabled (default: `5`). It should be lower than the Prometheus scrape timeout (`10` seconds by default). The requests made through the MLflow client to count the resources are instead governed by MLflow's own [`MLFLOW_HTTP_REQUEST_TIMEOUT`](https://mlflow.org/docs/latest/python_api/mlflow.environment_variables.html).
+- `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD`: The credentials to authenticate to the MLflow server with [Basic auth](https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/#using-environment-variables), both for collecting data and for fetching its traffic metrics (default: unset, i.e. no authentication).
+- `LOG_LEVEL`: The level of the exporter's own logs, among `DEBUG`, `INFO`, `WARNING`, `ERROR` and `CRITICAL` (default: `INFO`). At `INFO`, the exporter logs its configuration at startup; at `DEBUG`, it also logs the counts it collects at each poll. Logs from the libraries it uses are kept to warnings and above.
+
+The port, the MLflow server URL, the polling interval, the request timeout and the log level can
+also be passed as command-line arguments, which take precedence over the environment variables:
+`--port`/`-p`, `--mlflowurl`/`-u`, `--polling-interval`/`-i`, `--request-timeout` and
+`--log-level` (with `--timeout`/`-t` still accepted as a deprecated alias of the polling
+interval).
 
 Example ussage: 
 ```
-python src/mlflow_exporter.py -p 8999 -u http://localhost:31380/ -t 30
-PORT=8000 MLFLOW_URL=http://localhost:31380/ TIMEOUT=20 python src/mlflow_exporter.py
+python src/mlflow_exporter.py -p 8999 -u http://localhost:31380/ -i 30
+PORT=8000 MLFLOW_URL=http://localhost:31380/ POLLING_INTERVAL=20 python src/mlflow_exporter.py
+MLFLOW_TRACKING_USERNAME=<username> MLFLOW_TRACKING_PASSWORD=<password> python src/mlflow_exporter.py -u http://localhost:31380/
 ```
+
+## Metrics
+
+The exporter serves the following metrics on its `/metrics` endpoint:
+
+- Counts of MLflow resources, collected through the MLflow API every `POLLING_INTERVAL` seconds, for each of the following metric names:
+  - `num_experiments`: the number of experiments.
+  - `num_runs`: the number of runs.
+  - `num_registered_models`: the number of registered models (excluding prompts).
+  - `num_prompts`: the number of prompts.
+  - `num_model_versions`: the number of model versions (excluding prompt versions).
+  - `num_logged_models`: the number of logged models.
+
+  They are reported as:
+  - Deployment-level metrics: `mlflow_metric{metric_name="<metric_name>"}`. When the MLflow server runs with workspaces enabled, these are the totals across all the workspaces visible to the exporter's MLflow user, and a total is only reported when it was counted in every workspace.
+  - Per-workspace metrics, only when the MLflow server runs with workspaces enabled (`--enable-workspaces`): `mlflow_workspace_metric{metric_name="<metric_name>",workspace="<workspace>"}`, for each workspace visible to the exporter's MLflow user.
+- Traffic metrics of the MLflow tracking server (e.g., `mlflow_http_request_total` and `mlflow_http_request_duration_seconds`), fetched from the tracking server's `/metrics` endpoint under `MLFLOW_URL` at each scrape, and re-exposed as they are. They are only available when the tracking server runs with [`--expose-prometheus`](https://mlflow.org/docs/latest/api_reference/cli.html#mlflow-server).
+- The exporter's own process and Python runtime metrics (e.g., `process_cpu_seconds_total`).
+
+Each source of metrics is collected independently: when one fails (e.g., the tracking server is unreachable or rejects the credentials), the failure is logged and only the metrics of that source are left out, while the others keep being served. Likewise, each metric of each workspace is counted independently.
 
 ## Contributing
 
