@@ -337,7 +337,13 @@ if __name__ == "__main__":
     # Start the Prometheus HTTP server
     start_http_server(args.port)
 
-    # Periodically collect and update the metrics
+    # Periodically collect and update the metrics.
+    # Only the MLflow resource counts are polled and cached, rather than computed at scrape time:
+    # Prometheus recommends synchronous scrapes
+    # (https://prometheus.io/docs/instrumenting/writing_exporters/#scheduling), but counting the
+    # resources is expensive and could exceed the Prometheus scrape timeout. The tracking server
+    # metrics, instead, are cheap to get (a single GET request to its `/metrics` endpoint), so
+    # `TrackingServerMetricsCollector` fetches them synchronously on each scrape.
     while True:
         try:
             resources_collector.update(*collect_metrics(args.mlflowurl))
